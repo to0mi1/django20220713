@@ -18,7 +18,7 @@ def leibniz(n):
     pi = 4 * np.dot(y, pm)  # yとpmの内積によりプラマイ交互の和を計算し、最後に４をかける
 
 
-def buffon(mem, result):
+def buffon(process_uuid, mem, result):
     n = 0  # 線に重なる針の本数。初期値０。
     for i in range(mem[0]):  # iが0からN-1までの間、以下を繰り返す。
         # 針の角度のサンプリング。角度を直接サンプルする代わりに単位円内の点をサンプルすることでpiの値依存性を排除。
@@ -33,3 +33,4 @@ def buffon(mem, result):
             n += 1  # 線に重なる針の本数を加算
         mem[1] = i + 1
     result.value = mem[0] / n  # 円周率の計算
+    # Pi.objects.create(uuid=process_uuid, pi=result.value)

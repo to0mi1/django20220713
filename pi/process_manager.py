@@ -5,7 +5,8 @@ import uuid
 from datetime import datetime
 from multiprocessing import Process, Value, Array
 
-from Asobi.pi_calcuater import buffon
+from pi.models import Pi
+from pi.pi_calcuater import buffon
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class ProcessManager(object):
             # 今回は Web アプリケーション側から渡す値が全てプロセスで更新され、
             # Web アプリケーションで参照するため共有メモリでラップして変数を渡す
             # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Process
-            p = Process(target=buffon, args=(progress, result))
+            p = Process(target=buffon, args=(process_uuid, progress, result))
             p.start()
 
             # プロセスを管理するインスタンス変数のリストにプロセス情報を格納する
@@ -197,6 +198,28 @@ class ProcessManager(object):
                 return
             logger.info(f"管理されているプロセスが{len(self.__processes)}件あります。")
             for proc in self.__processes:
+
+                # プロセスの状態を確認し、結果をDBに格納する
+                # すでに保存済みの場合は処理をスキップ
+                if not Pi.objects.filter(id=uuid.UUID(proc['id'])):
+                    # 終了結果をプロセスの終了コードから判定する
+                    # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Process.exitcode
+                    status = None
+                    if proc['process'].exitcode is None:
+                        status = None
+                    elif proc['process'].exitcode == 0:
+                        status = 'SUCCEEDED'
+                    elif proc['process'].exitcode == 1:
+                        status = 'ERRORED'
+                    elif proc['process'].exitcode < 0:
+                        status = 'CANCELLED'
+                    elif proc['process'].exitcode > 1:
+                        status = 'EXITED'
+
+                    if status is not None:
+                        # 終了した場合は status に値が入るので結果をDBに格納する
+                        Pi.objects.create(id=uuid.UUID(proc['id']), pi=proc['result'].value, status=status)
+
                 # 管理されているプロセス全てをチェック
                 # プロセス起動後の時間を計測するため、現在時刻と起動時間を取得
                 start_time = proc['start_time']
@@ -212,7 +235,10 @@ class ProcessManager(object):
                         if proc['process'].is_alive():
                             # もしかして実行中であればプロセスを強制終了
                             # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Process.is_alive
-                            proc['process'].kill()  # よりの時は寄り強い機能で強制数量する
+                            proc['process'].kill()  # よりの時は寄り強い機能で強制終了する
+                            # ここにくる場合は制限時間内に終了していないので、ステータスを残して終了
+                            Pi.objects.create(id=uuid.UUID(proc['id']), pi=proc['result'].value, status='KILLED')
+
                         # プロセスが終了済みであればプロセスを開放する
                         # 実行中のまま close すると実行中のプロセスが放置される?
                         proc['process'].close()
