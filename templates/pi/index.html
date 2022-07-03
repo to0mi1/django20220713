@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>円周率計算</title>
+  {# Load the tag library #}
+  {% load django_bootstrap5 %}
+
+  {# Load CSS and JavaScript #}
+  {% bootstrap_css %}
+  {% bootstrap_javascript %}
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@100;300;400;500;700;800;900&display=swap"
+        rel="stylesheet">
+  <style>
+      body {
+          font-family: 'M PLUS Rounded 1c', sans-serif;
+          -webkit-font-smoothing: subpixel-antialiased;
+      }
+  </style>
+</head>
+<body class="d-flex flex-column h-100">
+<header>
+  <nav class="navbar navbar-light bg-light">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">円周率計算</a>
+    </div>
+  </nav>
+</header>
+<main class="flex-shrink-0">
+  <div id="calcBoxWrapper" class="container mt-3">
+    <div class="card calc-box my-3">
+      <div class="card-header">
+        円周率の計算
+      </div>
+      <div class="card-body">
+        <h5 class="card-title">円周率の計算</h5>
+        <p class="card-text">With supporting text below as a natural lead-in to additional content.</p>
+        <div class="progress mb-3">
+          <div class="progress-bar" role="progressbar" style="width: 0%;"
+               aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary exec-calc">計算開始</button>&nbsp;
+        <button type="button" disabled class="btn btn-danger kill-calc">タスクキル</button>&nbsp;
+        <span class="result">&nbsp</span>
+      </div>
+      <div class="card-footer text-muted">
+        &nbsp;
+      </div>
+    </div>
+  </div>
+</main>
+<footer class="footer mt-auto py-3 bg-light">
+  <div class="container">
+    <span class="text-muted">お遊びで書いてみた</span>
+  </div>
+</footer>
+<script>
+    /**
+     * Django に POST リクエストをするときに csrfトークンを含める必要があるため、
+     * cookie から トークンを取得する
+     */
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.addEventListener("DOMContentLoaded", function (evt) {
+        console.log("DOMContentLoaded")
+        // 計算開始ボタンにクリックイベント追加
+        $(document).on('click', '.exec-calc', clickExecCalcButton)
+        $(document).on('click', '.kill-calc', killProcess)
+
+        // リクエストに割り込み、csrf トークンを設定する
+        const csrftoken = getCookie('csrftoken');
+        $.ajaxSetup({
+            crossDomain: false, // obviates need for sameOrigin test
+            beforeSend: function (xhr, settings) {
+                xhr.setRequestHeader("X-CSRFToken", csrftoken);
+            }
+        });
+
+        // プロセスの進捗状況を一定時間毎に反復して取得するためのタイマー
+        // 進捗状況を取得する処理は別途関数で定義する
+        setInterval(checkProgress, 500);
+    })
+
+    /**
+     * 計算結果表示ボックスを複製し、末尾に追加する.
+     */
+    function cloneCalcBox() {
+        let srcElems = $('.calc-box')
+        $('#calcBoxWrapper').append($(srcElems[srcElems.length -1]).clone())
+    }
+
+    /**
+     * 計算開始ボタンクリック時の処理.
+     *
+     * @param event イベント
+     */
+    function clickExecCalcButton(event) {
+        console.log(this)
+        // クリックしたボタンから引数に設定したセレクタに一致する一番近い親要素を取得する
+        let parent = $(this).closest('.calc-box');
+        console.log(parent)
+
+        // 非同期通信で計算開始要求をリクエストする
+        $.ajax({
+            url: '/pi/calc',
+            type: 'POST',
+            dataType: 'json',
+        }).done(function (data) {
+            // リクエストがサーバーで正常に処理されたとき
+            console.log(data)
+            cloneCalcBox()
+            // 計算開始、中止ボタンの活性状態を更新する
+            parent.find('.exec-calc').prop('disabled', true)
+            parent.find('.kill-calc').prop('disabled', false)
+            // 一応画面に識別ID を OSのプロセスIDを表示する
+            parent.find('.card-footer').text(`id: ${data.id}, pid: ${data.pid}`)
+            // プログレスバーがどのプロセスに対応するか識別するため、識別IDを要素の属性に追加する
+            parent.attr('data-id', data.id)
+        });
+    }
+
+    /**
+     * 円周率計算の進捗をサーバーより取得し、画面を更新する.
+     */
+    function checkProgress() {
+        $.ajax({
+            url: '/pi/progress',
+            type: 'POST',
+            dataType: 'json'
+        }).done(function (data) {
+            console.log(data)
+            if (!'progresses' in data) {
+              return
+            }
+            for (let prog of data['progresses']) {
+              let parent = $(`.calc-box[data-id="${prog.id}"]`)
+              console.log(parent)
+              // プログレスバーの要素を得る
+              let progress = parent.find('.progress-bar')
+              // 現在の進捗を0から100の値で設定する
+              progress.attr('aria-valuenow', prog.progress)
+              // プログレスバーのバーの幅を CSS の width に百分率で設定する
+              progress.css('width', `${prog.progress}%`)
+              // プログレスバー上に進捗を小数点以下を切り捨てて表示する
+              progress.text(`${Math.floor(prog.progress)}%`)
+              if (Number.parseFloat(prog.result) !== 0) {
+                  // サーバーが result 0 以外でレスポンスした場合は処理が終了しているため、結果を画面に表示する
+                  parent.find('.result').text(prog.result)
+              }
+            }
+        });
+    }
+
+    /**
+     * 円周率計算を中止するようサーバーへリクエストを送信する.
+     *
+     * @param event jQuery イベント
+     */
+    function killProcess(event) {
+        $.ajax({
+            url: '/pi/kill',
+            type: 'POST',
+            dataType: 'json',
+            // クリックされたボタンから要素をたどり、プロセスの識別IDを得る
+            // データ形式を javascript のオブジェクトから JSON文字列に変換 (シリアライズ) し、リクエストの Body に設定する
+            data: JSON.stringify({
+                id: $(this).closest('.calc-box').attr('data-id')
+            }),
+            contentType: "application/json",
+        }).done(function (data) {})
+    }
+</script>
+</body>
+</html>
