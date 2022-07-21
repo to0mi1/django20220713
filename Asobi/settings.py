@@ -140,6 +140,9 @@ LOGGING = {
         'django.server': {
             '()': 'django.utils.log.ServerFormatter',
             'format': '[%(server_time)s] %(message)s a',
+        },
+        'default': {
+            'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         }
     },
     'handlers': {
@@ -147,6 +150,14 @@ LOGGING = {
             'level': 'DEBUG',
             'filters': ['require_debug_true'],
             'class': 'logging.StreamHandler',
+            'formatter': 'default',
+        },
+        'file': {
+            'level': 'DEBUG',
+            'filename': './aaaa.log',
+            'formatter': 'default',
+            'class': 'logging.FileHandler',
+            'encoding': 'utf-8',
         },
         'django.server': {
             'level': 'INFO',
@@ -160,13 +171,18 @@ LOGGING = {
         }
     },
     'loggers': {
-        '': {
-            'handlers': ['console'],
+        'root': {
+            'handlers': ['console', 'file'],
             'level': 'DEBUG',
-            'propagate': False,
+            # 'propagate': True,
         },
+        # '': {
+        #     'handlers': ['console', 'file'],
+        #     'level': 'DEBUG',
+        #     'propagate': True
+        # },
         'django': {
-            'handlers': ['console', 'mail_admins'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
         },
         'django.server': {
@@ -174,5 +190,10 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'multiprocessing': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        }
     }
 }

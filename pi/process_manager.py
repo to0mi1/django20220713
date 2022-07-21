@@ -3,7 +3,7 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from multiprocessing import Process, Value, Array
+from multiprocessing import Process, Value, Array, Queue
 
 from pi.models import Pi
 from pi.pi_calcuater import buffon
@@ -36,7 +36,10 @@ class ProcessManager(object):
         else:
             # インスタンスを作成前の場合はスーパークラスの __new__ を呼び出す
             inst = cls.__instance = super().__new__(cls)
-            # inst.start_process_watcher()
+            inst.start_process_watcher()
+            inst.__logging_queue = Queue()
+            inst.__logging_thread = threading.Thread(target=logger_thread, args=(inst.__logging_queue,))
+            inst.__logging_thread.start()
             return inst
 
     def __init__(self):
@@ -47,7 +50,7 @@ class ProcessManager(object):
         """
         super(ProcessManager, self).__init__()
         # プロセスを監視するメソッドを起動する
-        self.start_process_watcher()
+        # self.start_process_watcher()
 
     def start_process_watcher(self):
         """
@@ -103,7 +106,7 @@ class ProcessManager(object):
             # 今回は最初に反復回数は決め打ちのため、配列の0番目に全反復回数、1番目に現在の反復回数を格納するよう設計する
             # 反復回数は起動されるプロセス側で更新するため、Web アプリ側はそれを読み取り進捗を算出する
             # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Array
-            progress = Array('i', [10000000, 0])
+            progress = Array('i', [100, 0])
 
             # クライアントが要求したプロセス起動を一意に識別するため、ランダムな値を採番し記憶する
             # 進捗や結果がどの要求に対したものかをこの値で識別する
@@ -116,7 +119,7 @@ class ProcessManager(object):
             # 今回は Web アプリケーション側から渡す値が全てプロセスで更新され、
             # Web アプリケーションで参照するため共有メモリでラップして変数を渡す
             # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Process
-            p = Process(target=buffon, args=(process_uuid, progress, result))
+            p = Process(target=buffon, args=(self.__logging_queue, process_uuid, progress, result))
             p.start()
 
             # プロセスを管理するインスタンス変数のリストにプロセス情報を格納する
@@ -273,3 +276,13 @@ class ProcessWatcher(threading.Thread):
             logger.info(f"プロセスのクリーンアップを完了しました。{self._sleep_time}秒待機します。")
             # すごい勢いでチェックしてもしょうがないので、一定時間待機し一定の間隔でチェックする
             time.sleep(self._sleep_time)
+
+
+def logger_thread(q):
+    logger.info("start logger_thread")
+    while True:
+        record = q.get()
+        if record is None:
+            break
+        w_logger = logging.getLogger(record.name)
+        w_logger.handle(record)
