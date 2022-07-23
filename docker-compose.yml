@@ -1,0 +1,8 @@
+version: '3'
+services:
+  apache:
+    build: ./
+    image: apache-mod-wsgi-image
+    container_name: apache
+    ports:
+      - "8080:80"

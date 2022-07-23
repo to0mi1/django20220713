@@ -106,7 +106,7 @@ class ProcessManager(object):
             # 今回は最初に反復回数は決め打ちのため、配列の0番目に全反復回数、1番目に現在の反復回数を格納するよう設計する
             # 反復回数は起動されるプロセス側で更新するため、Web アプリ側はそれを読み取り進捗を算出する
             # https://docs.python.org/ja/3/library/multiprocessing.html#multiprocessing.Array
-            progress = Array('i', [100, 0])
+            progress = Array('i', [10000000, 0])
 
             # クライアントが要求したプロセス起動を一意に識別するため、ランダムな値を採番し記憶する
             # 進捗や結果がどの要求に対したものかをこの値で識別する
